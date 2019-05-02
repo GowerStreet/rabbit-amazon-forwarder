@@ -1,0 +1,55 @@
+branches: [ master ]
+
+clone:
+  git:
+    image: plugins/git:next
+    pull: true
+
+slack: &slack
+  image: plugins/slack
+  webhook: https://hooks.slack.com/services/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
+  username: Drone CI
+  icon_url: https://pbs.twimg.com/profile_images/573911705505259520/rShq67tG_400x400.png
+
+pipeline:
+  publish-latest-image:
+    image: plugins/docker
+    build_args:
+      - "TAG=1.0.${DRONE_BUILD_NUMBER}"
+    repo: gowerstreet/rabbit-amazon-forwarder
+    secrets: [docker_username, docker_password]
+    tags:
+      - latest
+      - "1.0.${DRONE_BUILD_NUMBER}"
+
+  slack-master-success:
+    <<: *slack
+    channel: releases
+    template:
+      RELEASING *{{ repo.name }} 1.2.{{ build.number }}* (Main forecast app)
+      (<https://github.com/{{ repo.owner }}/{{ repo.name }}/commit/{{ build.commit }}|GitHub>)
+      (<{{ build.link }}|CI>)
+    when:
+      event: push
+      branch: master
+      status: success
+
+  slack-pr-fail:
+    <<: *slack
+    channel: dev
+    template: >
+      *{{ build.status }}*
+      <{{ build.link }}|{{ repo.owner }}/{{ repo.name }}>
+      (<https://github.com/{{ repo.owner }}/{{ repo.name }}/pull/{{ build.pull }}|PR #{{ build.pull }}>)
+      by {{ build.author }}
+    when:
+      event: pull_request
+      status: failure
+
+  slack-master-fail:
+    <<: *slack
+    channel: dev
+    when:
+      event: push
+      branch: master
+      status: failure
